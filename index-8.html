@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Section 8: Geo Map</title>
+    <meta charset="utf-8">
+    <script src="d3.v3.min.js" type="text/JavaScript"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+  </head>
+  <body>
+    <div id="content">
+      <h1>Geo Map</h1>
+    </div>
+    <script>
+    // global map settings
+    var map = {
+      width: 960,
+      height:1160,
+      product: "0901", //  http://atlas.media.mit.edu/about/data/hs
+      year:2012
+    };
+
+    var color = d3.scale.linear().range(["#f7fcf5", "#00441b"]).interpolate(d3.interpolateRgb);
+
+    //code needed to run once on page load
+    function init(){
+      //initialize 
+      map.svg = d3.select("#content").append("svg")
+                  .attr("width", map.width)
+                  .attr("heigth", map.height);
+
+      // fetch topoJson data from server
+      d3.json("topo_countries.json", function(error, countries_json) {
+        if(error) return console.error("error");
+        map.countries = topojson.feature(countries_json, countries_json.objects.countries).features;
+        draw_map();
+      });
+    }
+
+    //reusable code to draw the map
+    function draw_map(){
+      //ask OEC API for Data
+      var oec_url = "http://atlas.media.mit.edu/hs/export/"+map.year+"/show/all/"+map.product+"/";
+
+      //ask OEC API for Data
+      d3.json(oec_url, function (error, exports){
+
+        //set the colordomain based on data
+        color.domain(d3.extent(exports.data, function(d) { return d.export_val; }));
+
+        //merg Oec data with our country geometry
+        mergeTopo(exports);
+        // "enter" our country paths to our svg canvas
+        var country_paths = map.svg.selectAll(".country")
+                            .data(map.countries, function(d){ return d.id; });
+        country_paths.enter().insert("path", ".country")
+          .attr("class", "country")
+          .attr("d", d3.geo.path().projection(d3.geo.mercator()))
+          .style("stroke", "steelblue");
+
+        // "update" our county paths with the corresponginf color mapped to their export value
+        country_paths
+          .style("fill", function(d){
+            //get data value
+            var val = d.properties.export_val;
+              if(val) {
+                return color(val); // a values exists
+              } else {
+                return "#fff";    // export_val is undefined - white
+              }
+          });
+
+          });
+    }
+    //initialize immediatley
+    init();
+
+    function mergeTopo(exports) {
+      // merge OEC data with our country geometry
+      exports.data.forEach(function(export_country){
+        // grab country ID
+        var export_county_id = export_country.origin_id.substr(2);
+
+        // grab data vale and convert from string to float
+        var export_val = parseFloat(export_country.export_val);
+
+        //find corresponding country inside the topoJSON
+        map.countries.some(function(geo_country){
+          var geo_country_id = geo_country.id.toLowerCase();
+          if (export_county_id == geo_country_id){
+            //copy the data value into JSON
+            geo_country.properties.export_val = export_val;
+            //stop looking through JSON
+            return true;
+          }
+        });    
+      });
+    }
+    </script>
+  </body>
+</html>
